@@ -97,3 +97,62 @@
 .overlayLayer > * {
   pointer-events: auto;
 }
+
+/*
+ * Narrow-frame sidebar drawer. The sidebar column keeps no grid track in either
+ * state, so this fixed layer — not a track — is what places it: click-through
+ * itself, with a dismiss scrim beneath the panel so tapping the conversation
+ * closes the drawer. Closed, the layer's only occupant is the sidebar's own
+ * reopen control, which sits at the frame's top-left corner.
+ */
+.drawerLayer {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+}
+
+.drawerScrim {
+  position: absolute;
+  inset: 0;
+  background: var(--dsw-alias-bg-mask-1);
+  backdrop-filter: var(--dsw-mask-blur);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--ds-transition-duration-slow) var(--ds-ease-in-out);
+}
+
+.drawerLayer[data-open] .drawerScrim {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Sized by its occupant: the reopen control closed, the full drawer open. */
+.drawerBody {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawerScrim {
+    transition: none;
+  }
+}
+
+/*
+ * Explicit column placement. A narrow frame renders no sidebar grid item (the
+ * sidebar floats in .drawerLayer), so auto-placement would seat .centerCol in
+ * the zero-width first track and leave the conversation invisible. Naming the
+ * tracks keeps the center in the flexible middle and the right column last in
+ * both frame widths.
+ */
+.centerCol {
+  grid-column: 2;
+}
+
+.rightbarCol {
+  grid-column: 3;
+}

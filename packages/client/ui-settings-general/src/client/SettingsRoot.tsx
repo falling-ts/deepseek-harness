@@ -14,7 +14,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from
 import clsx from 'clsx'
 import {
   ConnectionIndicator,
-  IconAgentPresetOutline16, IconCloseOutline16, IconDataOutline16,
+  IconAgentPresetOutline16, IconCloseOutline16, IconDataOutline16, IconPanelLeftOutline16,
   IconPersonalizationOutline16, IconSettingsOutline16,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ConnectionIndicatorState } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -37,18 +37,24 @@ type PanelProps = {
   activeId: string | undefined
   onSelect: (id: string) => void
   onClose: () => void
+  navLabel: string
 }
 
 /**
  * The modal layer: full-viewport mask + centered panel. Close paths: the
  * header button, a mask click, and document-level Escape (mounted only while
  * open, so the listener lifetime is the panel's).
+ *
+ * The nav's own open state is narrow-only viewing state: below the layout
+ * breakpoint the nav floats over the options (SettingsRoot.module.css), and at
+ * or above it the nav is a permanent track that this flag cannot move.
  */
-function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelProps) {
+function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose, navLabel }: PanelProps) {
   // Entries can unmount underneath the requested id, so the render-time
   // projection falls back to the first row when the id is gone.
   const active = rows.find(r => r.id === activeId)?.id ?? rows[0]?.id
   const titleId = useId()
+  const [navOpen, setNavOpen] = useState(false)
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -65,7 +71,7 @@ function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelP
   return (
     <div className={css.overlay} role="presentation">
       <div className={css.mask} aria-hidden="true" onClick={onClose} />
-      <div className={css.panel} role="dialog" aria-modal="true" aria-labelledby={titleId}>
+      <div className={css.panel} role="dialog" aria-modal="true" aria-labelledby={titleId} data-nav-open={navOpen || undefined}>
         <nav className={css.nav}>
           <div className={css.navTitle} id={titleId}>{renderSlot('settings.header', {})}</div>
           <div className={css.navList}>
@@ -75,7 +81,7 @@ function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelP
                 type="button"
                 className={clsx(css.navCell, row.id === active && css.active)}
                 aria-current={row.id === active ? 'true' : undefined}
-                onClick={() => { onSelect(row.id) }}
+                onClick={() => { onSelect(row.id); setNavOpen(false) }}
               >
                 {navIcon(row.id)}
                 <span className={css.navLabel}>{row.label}</span>
@@ -85,6 +91,17 @@ function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelP
         </nav>
         <div className={css.content}>
           <div className={css.header}>
+            {/* Drawn only where the nav floats: opening it must not be the
+                only way to reach a section. */}
+            <button
+              type="button"
+              className={css.navToggle}
+              aria-label={navLabel}
+              aria-expanded={navOpen}
+              onClick={() => { setNavOpen(open => !open) }}
+            >
+              <IconPanelLeftOutline16 size={16} />
+            </button>
             <div className={css.actions}>{renderSlot('settings.action', {})}</div>
             <button ref={closeButton} type="button" className={css.close} onClick={onClose}>
               <IconCloseOutline16 size={14} />
@@ -209,6 +226,7 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
           activeId={activeId}
           onSelect={setActiveId}
           onClose={close}
+          navLabel={t('nav.toggle')}
         />
       )}
       {/* Dialog chrome and `#root` inert ownership live inside each step's

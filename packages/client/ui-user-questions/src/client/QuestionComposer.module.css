@@ -442,12 +442,19 @@
     padding: 8px 6px;
   }
 
+  /* The action pair stacks on a phone: sharing one row with the pager and the
+     feedback seat leaves both buttons too narrow to show their own labels, and
+     the full-width column puts the primary action last, under the thumb. */
   .footer {
+    flex-wrap: wrap;
     align-items: flex-end;
     padding: 0 10px;
   }
 
   .footerActions {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
     flex-shrink: 0;
   }
 }

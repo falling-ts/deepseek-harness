@@ -415,6 +415,41 @@
   width: auto;
 }
 
+/* Narrow drawer: the frame reserves no track for this column, so the drawer
+   paints its own elevation instead of sitting in a bordered track, and enters
+   from the frame edge it is anchored to. The elevation carries the outline
+   hairline, so the drawer adds no border of its own. */
+.root.drawer {
+  box-shadow: var(--dsw-elevation-prominent);
+  animation: drawer-in 200ms var(--ds-ease-in-out);
+}
+
+@keyframes drawer-in {
+  from { transform: translateX(-100%); }
+}
+
+/* Narrow closed state: the column is this one control, floating at the frame's
+   top-left corner over the conversation (the frame's drawer layer places it). */
+.reopen {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 12px;
+  background: var(--dsw-specific-sidebar-fill);
+  color: var(--dsw-alias-label-primary);
+  box-shadow: var(--dsw-elevation-prominent);
+  cursor: pointer;
+}
+
+.reopen:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .wide,
   .fading > *,
@@ -422,7 +457,8 @@
   .railIn .newSession,
   .railIn .panelList,
   .railIn .footArea,
-  .railIn .regionArea {
+  .railIn .regionArea,
+  .root.drawer {
     transition: none;
     animation: none;
   }

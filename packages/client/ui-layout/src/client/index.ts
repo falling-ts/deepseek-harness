@@ -55,8 +55,10 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * the seats it declares disappear with it. To add something to the
      * sidebar, register into one of those inner seats instead.
      *
-     * The occupant receives the frame's live column state (collapsed, width)
-     * and is expected to render the compact control rail while collapsed.
+     * The occupant receives the frame's live column state (collapsed, width,
+     * narrow). Collapsed on a wide frame it renders the compact control rail;
+     * on a narrow frame the column owns no track, so collapsed it draws the
+     * reopen control alone and expanded it draws the floating drawer.
      */
     'sidebar': { kind: 'single'; scope: 'root'; owner: SidebarOwnerProps }
     /**
@@ -98,12 +100,19 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 // PropsStore & I). Conversation business state and actions arrive through
 // framework-standard hooks and each registrant's inject face, not owner props.
 
-/** Sidebar owner share: live column state from the frame's concession solve. */
+/**
+ * Sidebar owner share: live column state from the frame's concession solve.
+ * What "closed" draws depends on the frame: wide keeps a rail in its 56px
+ * track, narrow reserves no track and leaves the occupant's reopen control
+ * floating at the frame's top-left corner.
+ */
 export interface SidebarOwnerProps {
-  /** True when the sidebar is closed (the column renders the compact control rail). */
+  /** True when the sidebar is closed (the wide rail, or the narrow reopen control alone). */
   collapsed: boolean
-  /** Rendered column width in px (SIDEBAR_COLLAPSED when collapsed). */
+  /** Rendered column width in px: the solved track wide, the drawer width narrow. */
   width: number
+  /** True when the frame is narrow, so the column floats in the drawer layer and owns no track. */
+  narrow: boolean
 }
 
 /** Right column owner share: resolved normal geometry and opening eligibility. */

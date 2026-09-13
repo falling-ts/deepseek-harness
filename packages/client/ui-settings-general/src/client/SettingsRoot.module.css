@@ -234,3 +234,66 @@
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+/* Nav toggle: only a narrow frame needs it, because only there does the nav
+   float and therefore have a state to open (the media query below draws it). */
+.navToggle {
+  display: none;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 28px;
+  background: transparent;
+  cursor: pointer;
+  color: var(--dsw-alias-label-primary);
+}
+
+.navToggle:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/*
+ * Narrow frames float the nav over the options instead of giving it a track.
+ * The panel's own width assumes a desktop frame (figma 1080x700, shipped at
+ * 800), where the 188px rail still leaves the options column usable; at phone
+ * widths the two panes would each get about half of a ~350px panel, trading one
+ * surface's width for the other's. The nav already hugs the panel's left edge,
+ * so floating it is a change of placement, not of markup.
+ *
+ * The 1023px breakpoint mirrors ui-layout's SIDEBAR_AUTO_COLLAPSE (1024),
+ * the width at which that frame stops reserving tracks for its own sides.
+ */
+@media (max-width: 1023px) {
+  .panel {
+    max-width: calc(100vw - 24px);
+  }
+
+  .navToggle {
+    display: grid;
+  }
+
+  .nav {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 2;
+    background: var(--dsw-alias-bg-layer-2);
+    box-shadow: var(--dsw-elevation-prominent);
+    transform: translateX(-100%);
+    transition: transform var(--ds-transition-duration-slow) var(--ds-ease-in-out);
+  }
+
+  .panel[data-nav-open] .nav {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav {
+    transition: none;
+  }
+}

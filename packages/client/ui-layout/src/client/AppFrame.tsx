@@ -3,7 +3,10 @@
  * shell renders only 'root'). Owns the grid tracks (sidebar | center |
  * rightbar), the drag handles (pointer capture + rAF throttle), the column
  * solve (columns.ts), and the child-slot render decisions: the sidebar slot
- * receives live parameters from that solve. The root-scoped main slot selects
+ * receives live parameters from that solve. On a narrow frame the sidebar
+ * leaves the grid: it floats over the conversation in the drawer layer, closed
+ * it renders only its own reopen control, and no track ever reserves its width.
+ * The root-scoped main slot selects
  * the Conversation or a global panel. Each column occupant owns its Session
  * binding and reports the geometry it needs.
  *
@@ -19,7 +22,7 @@ import type { ReactNode } from 'react'
 import type {
   PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore,
 } from '@deepseek-ai/dsh-client-ui-slots'
-import { computeColumns, RIGHTBAR_DEFAULT_RATIO, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_DEFAULT } from './columns.ts'
+import { computeColumns, RIGHTBAR_DEFAULT_RATIO, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_COLLAPSED, SIDEBAR_DEFAULT, sidebarDrawerWidth } from './columns.ts'
 import { DocumentTitle } from './DocumentTitle.tsx'
 import type { createLayoutStore } from './stores.ts'
 import css from './AppFrame.module.css'
@@ -163,10 +166,13 @@ export function AppFrame({
     ? 0
     : layoutInfo.sidebar === 0 ? SIDEBAR_DEFAULT : layoutInfo.sidebar
   const rightbarPreference = layoutInfo.rightbar ?? viewport * RIGHTBAR_DEFAULT_RATIO
-  // Opening on a narrow frame collapses the left sidebar. Eligibility must
-  // include that space before the occupant's first shown report arrives.
-  const normal = computeColumns(viewport, !layoutInfo.rightbarShown && narrow ? 0 : sidebarPreference, rightbarPreference)
-  const cols = computeColumns(viewport, sidebarPreference, layoutInfo.rightbarTrack ? rightbarPreference : 0)
+  // A narrow frame resolves no sidebar track in either state: closed it is only
+  // the floating reopen control, open it draws over the conversation from the
+  // drawer layer. Supplying 0 as the collapsed rail is what removes the track.
+  const frameSidebar = narrow ? 0 : sidebarPreference
+  const collapsedRail = narrow ? 0 : SIDEBAR_COLLAPSED
+  const normal = computeColumns(viewport, frameSidebar, rightbarPreference, collapsedRail)
+  const cols = computeColumns(viewport, frameSidebar, layoutInfo.rightbarTrack ? rightbarPreference : 0, collapsedRail)
   const colsRef = useRef(cols)
   colsRef.current = cols
   const rightbarWidth = useRef(normal.rightbar)
@@ -190,10 +196,14 @@ export function AppFrame({
     actions.setRightbar(rightbarBase.current - dx)
   }, [actions])
   const productTitle = process.env.DSH_CLIENT_TITLE ?? t('brand.localBuild')
+  // The drawer takes the contract's widest sidebar the frame can hold; the
+  // closed column keeps its solved width, which is the rail on a wide frame.
+  const sidebarWidth = narrow ? sidebarDrawerWidth(viewport) : cols.sidebar
   const sidebar = useMemo(() => renderSlot('sidebar', {
     collapsed: sidebarCollapsed,
-    width: cols.sidebar,
-  }), [renderSlot, sidebarCollapsed, cols.sidebar])
+    width: sidebarWidth,
+    narrow,
+  }), [renderSlot, sidebarCollapsed, sidebarWidth, narrow])
   const main = useMemo(() => (
     <MainPanel usePanelInfo={usePanelInfo} renderSlot={renderSlot} />
   ), [usePanelInfo, renderSlot])
@@ -218,9 +228,20 @@ export function AppFrame({
         useSessions={useSessions}
         usePanelInfo={usePanelInfo}
       />
-      <div className={css.sidebarCol}>
-        {sidebar}
-      </div>
+      {narrow
+        ? (
+          /* Floating sidebar: the layer is click-through, its scrim dismisses
+             the drawer, and the column inside is what the occupant draws. */
+          <div className={css.drawerLayer} data-sidebar-drawer data-open={!sidebarCollapsed || undefined}>
+            <div className={css.drawerScrim} aria-hidden="true" onClick={() => { actions.toggleSidebar() }} />
+            <div className={css.drawerBody}>{sidebar}</div>
+          </div>
+        )
+        : (
+          <div className={css.sidebarCol}>
+            {sidebar}
+          </div>
+        )}
       <>
         <CenterColumn>{main}</CenterColumn>
         <RightbarColumn>
@@ -230,8 +251,9 @@ export function AppFrame({
       <div className={css.overlayLayer} data-shell-overlay>
         {overlays}
       </div>
-      {/* The collapsed rail is fixed-width: no resize handle while closed. */}
-      {!sidebarCollapsed && <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />}
+      {/* The collapsed rail is fixed-width, and the narrow drawer is sized by
+          the contract: neither takes a resize handle. */}
+      {!narrow && !sidebarCollapsed && <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />}
       {layoutInfo.rightbarShown && !layoutInfo.rightbarFullscreen && normal.rightbar > 0 && (
         <DragHandle side="rightbar" left={viewport - normal.rightbar} onStart={onRightbarStart} onDrag={onRightbarDrag} onEnd={onDragEnd} />
       )}

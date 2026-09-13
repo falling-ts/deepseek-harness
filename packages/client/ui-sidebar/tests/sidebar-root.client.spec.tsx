@@ -44,7 +44,7 @@ function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; w
   let current = { collapsed, width }
   const root = () => (
     <SidebarRoot
-      collapsed={current.collapsed} width={current.width}
+      collapsed={current.collapsed} width={current.width} narrow={false}
       useSessions={neverHook} useSessionPendingInteraction={useSessionPendingInteraction}
       usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])}
       useResource={useResource} useWorkspaces={neverHook}
@@ -110,7 +110,7 @@ describe('SidebarRoot shell', () => {
     vi.stubEnv('DSH_CLIENT_GIT_DIRTY', 'true')
     vi.stubEnv('DSH_CLIENT_VERSION', '1.2.3-rc.4')
     const { container } = render(<SidebarRoot
-      collapsed={false} width={300}
+      collapsed={false} width={300} narrow={false}
       useSessions={neverHook} useSessionPendingInteraction={useSessionPendingInteraction}
       usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])}
       useResource={useResource} useWorkspaces={neverHook}
@@ -130,7 +130,7 @@ describe('SidebarRoot shell', () => {
   ])('omits unavailable build-version suffixes from %j', (environment, expected) => {
     for (const [name, value] of Object.entries(environment)) vi.stubEnv(name, value)
     render(<SidebarRoot
-      collapsed={false} width={300}
+      collapsed={false} width={300} narrow={false}
       useSessions={neverHook} useSessionPendingInteraction={useSessionPendingInteraction}
       usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])}
       useResource={useResource} useWorkspaces={neverHook}
@@ -145,7 +145,7 @@ describe('SidebarRoot shell', () => {
 
   it('retains the local-build fallback without complete build metadata', () => {
     render(<SidebarRoot
-      collapsed={false} width={300}
+      collapsed={false} width={300} narrow={false}
       useSessions={neverHook} useSessionPendingInteraction={useSessionPendingInteraction}
       usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])}
       useResource={useResource} useWorkspaces={neverHook}

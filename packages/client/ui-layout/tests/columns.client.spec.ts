@@ -1,11 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import { clampWidth, computeColumns } from '../src/client/columns.ts'
+import { clampWidth, computeColumns, sidebarDrawerWidth } from '../src/client/columns.ts'
 
 describe('clampWidth', () => {
   it('clamps into the range and rounds', () => {
     expect(clampWidth(250.4, 240, 420)).toBe(250)
     expect(clampWidth(100, 240, 420)).toBe(240)
     expect(clampWidth(9999, 240, 420)).toBe(420)
+  })
+})
+
+describe('sidebarDrawerWidth', () => {
+  it('opens the drawer at the widest sidebar and shrinks it only to keep the frame edge', () => {
+    expect(sidebarDrawerWidth(1920)).toBe(420)
+    expect(sidebarDrawerWidth(1023)).toBe(420)
+    expect(sidebarDrawerWidth(476)).toBe(420)
+    expect(sidebarDrawerWidth(400)).toBe(344)
+    expect(sidebarDrawerWidth(320)).toBe(264)
   })
 })
 
@@ -49,5 +59,10 @@ describe('computeColumns', () => {
   it('leaves a closed right track closed when the frame widens', () => {
     expect(computeColumns(755, 0, 0).rightbar).toBe(0)
     expect(computeColumns(1920, 0, 0).rightbar).toBe(0)
+  })
+
+  it('drops the closed-sidebar rail where the frame floats that sidebar', () => {
+    expect(computeColumns(400, 0, 0, 0)).toEqual({ sidebar: 0, center: 400, rightbar: 0 })
+    expect(computeColumns(800, 0, 360, 0)).toEqual({ sidebar: 0, center: 440, rightbar: 360 })
   })
 })

@@ -10,6 +10,9 @@
  * global panel rows and the foot is the `sidebar.workspaces` registrant's,
  * and the foot holds `sidebar.settings` plus `sidebar.footer.action`; the shell
  * hands them the wide flag (plus an expand request callback for the browser).
+ * On a narrow frame the column owns no track and never renders the rail: closed
+ * it is the reopen control alone, open it renders that same wide content as a
+ * drawer the frame's layer sizes and places over the conversation.
  *
  * The column also owns whether the scroll regions nested in it draw a
  * scrollbar at all: the shell tracks the pointer and rebinds ui-theme's
@@ -88,6 +91,7 @@ function PanelRow({ id, label, wide, usePanelInfo, selectPanel, renderSlot }: Pa
 export function SidebarRoot({
   collapsed,
   width,
+  narrow,
   startSession,
   toggleSidebar,
   selectPanel,
@@ -163,12 +167,30 @@ export function SidebarRoot({
 
   const buildVersion = localBuildVersion()
 
+  // A narrow frame gives this column no track at all, so closed there is
+  // nothing to draw but the control that reopens it: the drawer's content stays
+  // unmounted until it opens, and the control floats at the frame's top-left
+  // corner (the frame's drawer layer places it — AppFrame.module.css).
+  if (narrow && collapsed) {
+    return (
+      <button
+        type="button"
+        className={css.reopen}
+        aria-label={t('toggle.open')}
+        onClick={() => { toggleSidebar() }}
+      >
+        <IconPanelLeftOutline16 size={18} />
+      </button>
+    )
+  }
+
   return (
     <div
       ref={column}
       className={clsx(
         css.root, !wide && css.collapsed, !wide && everWide.current && css.railIn,
         collapsed && wide && css.fading, !pointerInside && css.quietBars,
+        narrow && css.drawer,
       )}
       style={wide ? { width: collapsed ? lastWideWidth.current : width } : undefined}
       onPointerEnter={() => {

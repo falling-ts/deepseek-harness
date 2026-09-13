@@ -200,7 +200,7 @@ describe('AppFrame', () => {
   it('renders owner props for the default sidebar and prospective right panel', () => {
     const { frame, rightOwner, sidebarOwner, slotCalls } = mountFrame()
     expect(tracks(frame)).toEqual([280, 0])
-    expect(sidebarOwner()).toEqual({ collapsed: false, width: 280 })
+    expect(sidebarOwner()).toEqual({ collapsed: false, width: 280, narrow: false })
     expect(rightOwner()).toEqual({ width: 864, viewportWidth: 1920, canShow: true })
     expect(slotCalls.find(c => c.key === 'main')).toEqual({ key: 'main', props: {}, options: { entryKey: 'conversation' } })
   })
@@ -225,7 +225,7 @@ describe('AppFrame', () => {
     const { frame, instance, sidebarOwner, getByTestId } = mountFrame()
     act(() => { instance.actions.toggleSidebar() })
     expect(tracks(frame)).toEqual([56, 0])
-    expect(sidebarOwner()).toEqual({ collapsed: true, width: 56 })
+    expect(sidebarOwner()).toEqual({ collapsed: true, width: 56, narrow: false })
     expect(getByTestId('sidebar-content')).toBeTruthy()
     expect(frame.querySelector('[data-side="sidebar"]')).toBeNull()
   })
@@ -276,61 +276,92 @@ describe('AppFrame normal width concessions', () => {
     expect(instance.getSnapshot().layoutInfo).toMatchObject({ rightbarShown: true, rightbar: 864 })
     act(() => { instance.actions.closeRightbar() })
     resize(455)
-    expect(tracks(frame)).toEqual([56, 0])
+    expect(tracks(frame)).toEqual([0, 0])
     resize(1920)
     expect(tracks(frame)).toEqual([420, 0])
   })
 
-  it('uses the post-collapse left rail to permit a narrow first opening', () => {
+  it('gives a narrow frame the whole width while its sidebar is closed or open', () => {
     frameWidth = 800
-    const { frame, instance, rightOwner } = mountFrame()
+    const { frame, instance, rightOwner, sidebarOwner } = mountFrame()
+    // Closed: the occupant draws only the reopen control, and no track holds it.
+    expect(tracks(frame)).toEqual([0, 0])
+    expect(sidebarOwner()).toEqual({ collapsed: true, width: 420, narrow: true })
     act(() => { instance.actions.toggleSidebar() })
-    expect(tracks(frame)).toEqual([280, 0])
-    expect(rightOwner()).toEqual({ width: 344, viewportWidth: 800, canShow: true })
+    // Open: the drawer covers the conversation instead of squeezing it.
+    expect(tracks(frame)).toEqual([0, 0])
+    expect(sidebarOwner()).toEqual({ collapsed: false, width: 420, narrow: true })
+    // With no rail to concede, a narrow frame fits the right panel earlier.
+    expect(rightOwner()).toEqual({ width: 360, viewportWidth: 800, canShow: true })
     act(() => { instance.actions.openRightbar(true, false) })
-    expect(tracks(frame)).toEqual([56, 344])
+    expect(tracks(frame)).toEqual([0, 360])
     expect(instance.getSnapshot().layoutInfo).toMatchObject({ narrowExpanded: false, rightbar: 360 })
     expect(rightOwner().canShow).toBe(true)
   })
 
-  it.each([[756, 300, true], [755, 0, false]] as const)('reports eligibility at %ipx', (width, rightbar, canShow) => {
+  it.each([[700, 300, true], [699, 0, false]] as const)('reports eligibility at %ipx', (width, rightbar, canShow) => {
     frameWidth = width
     const { instance, rightOwner } = mountFrame()
     act(() => { instance.actions.toggleSidebar() })
     expect(rightOwner()).toEqual({ width: rightbar, viewportWidth: width, canShow })
   })
 
-  it('does not anticipate another left collapse after the right panel is already shown', () => {
+  it('keeps right-panel eligibility when the narrow drawer opens over the conversation', () => {
     frameWidth = 800
     const { instance, rightOwner } = mountFrame()
     act(() => { instance.actions.openRightbar(true, false); instance.actions.toggleSidebar() })
-    expect(rightOwner().canShow).toBe(false)
+    // The drawer takes no track in either state, so opening it concedes nothing.
+    expect(rightOwner().canShow).toBe(true)
   })
 
   it('auto-collapses only below 1024px and preserves the wide sidebar preference', () => {
-    const { frame, instance } = mountFrame()
+    const { frame, instance, sidebarOwner } = mountFrame()
     act(() => { instance.actions.setSidebar(400) })
     resize(1024)
     expect(tracks(frame)[0]).toBe(400)
+    expect(sidebarOwner()).toEqual({ collapsed: false, width: 400, narrow: false })
+    // Below the breakpoint the column leaves the grid: the frame keeps its whole
+    // width in both states, and the wide preference survives the trip.
     resize(1023)
-    expect(tracks(frame)[0]).toBe(56)
+    expect(tracks(frame)[0]).toBe(0)
+    expect(sidebarOwner()).toEqual({ collapsed: true, width: 420, narrow: true })
     act(() => { instance.actions.toggleSidebar() })
-    expect(tracks(frame)[0]).toBe(400)
+    expect(tracks(frame)[0]).toBe(0)
+    expect(sidebarOwner()).toEqual({ collapsed: false, width: 420, narrow: true })
     resize(980)
-    expect(tracks(frame)[0]).toBe(400)
+    expect(tracks(frame)[0]).toBe(0)
     act(() => { instance.actions.toggleSidebar() })
-    expect(tracks(frame)[0]).toBe(56)
+    expect(tracks(frame)[0]).toBe(0)
+    expect(sidebarOwner()).toEqual({ collapsed: true, width: 420, narrow: true })
     resize(1920)
     expect(tracks(frame)[0]).toBe(400)
   })
 
-  it('re-expands a wide-closed sidebar at the default width while narrow', () => {
-    const { frame, instance } = mountFrame()
+  it('re-expands a wide-closed sidebar as a floating drawer on a narrow frame', () => {
+    const { frame, instance, sidebarOwner } = mountFrame()
     act(() => { instance.actions.toggleSidebar() })
     resize(980)
     act(() => { instance.actions.toggleSidebar() })
-    expect(tracks(frame)[0]).toBe(280)
+    expect(tracks(frame)[0]).toBe(0)
+    expect(sidebarOwner()).toEqual({ collapsed: false, width: 420, narrow: true })
     expect(instance.getSnapshot().layoutInfo.sidebar).toBe(0)
+  })
+
+  it('mounts the narrow sidebar in a dismissable drawer layer instead of a track', () => {
+    frameWidth = 400
+    const { frame, instance, sidebarOwner, getByTestId } = mountFrame()
+    expect(frame.querySelector('[data-sidebar-drawer]')).toBeTruthy()
+    expect(frame.querySelector('[data-sidebar-drawer]')?.hasAttribute('data-open')).toBe(false)
+    // The occupant is mounted behind the scrim even while the drawer is shut.
+    expect(getByTestId('sidebar-content')).toBeTruthy()
+    act(() => { instance.actions.toggleSidebar() })
+    expect(sidebarOwner()).toEqual({ collapsed: false, width: 344, narrow: true })
+    expect(frame.querySelector('[data-sidebar-drawer]')?.getAttribute('data-open')).toBe('true')
+    // A narrow frame fits no sidebar track, so no resize handle exists either.
+    expect(frame.querySelector('[data-side="sidebar"]')).toBeNull()
+    act(() => { frame.querySelector<HTMLElement>('[data-sidebar-drawer] > div')!.click() })
+    expect(instance.getSnapshot().layoutInfo.narrowExpanded).toBe(false)
+    expect(sidebarOwner()).toEqual({ collapsed: true, width: 344, narrow: true })
   })
 })
 
@@ -417,11 +448,13 @@ describe('AppFrame right panel presentation', () => {
   })
 
   it('retains fullscreen without a track when normal columns cannot fit', () => {
-    frameWidth = 700
+    // With the closed sidebar owning no track, the normal right panel fits down
+    // to CENTER_MIN + RIGHTBAR_MIN (700px); below that it takes no track at all.
+    frameWidth = 640
     const { frame, instance, rightOwner } = mountFrame()
     act(() => { instance.actions.openRightbar(false, true) })
-    expect(tracks(frame)).toEqual([56, 0])
-    expect(rightOwner()).toEqual({ width: 0, viewportWidth: 700, canShow: false })
+    expect(tracks(frame)).toEqual([0, 0])
+    expect(rightOwner()).toEqual({ width: 0, viewportWidth: 640, canShow: false })
     expect(instance.getSnapshot().layoutInfo.rightbarShown).toBe(true)
     expect(frame.querySelector('[data-side="rightbar"]')).toBeNull()
   })
