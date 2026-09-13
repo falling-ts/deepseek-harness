@@ -36,6 +36,7 @@ import { validateStoredEvents } from '@deepseek-ai/dsh-session-persistence'
 import type { JsonlCompression } from './format.ts'
 import { generationLogFilename, logSuffix, SessionLogScanner } from './format.ts'
 import { publishNewFileWin32 } from './win32.ts'
+import { publishNewFilePosix } from './posix.ts'
 import {
   compressZstdFrame,
   createZstdFrameDecoder,
@@ -826,7 +827,7 @@ async function publishCurrentExclusive(
     }
   }
   try {
-    await internals.fs.link(staged, currentPath)
+    await publishNewFilePosix(staged, currentPath, (existingPath, newPath) => internals.fs.link(existingPath, newPath))
   } catch (error) {
     /* v8 ignore else -- a non-collision filesystem error propagates unchanged. */
     if (isEEXIST(error)) return false

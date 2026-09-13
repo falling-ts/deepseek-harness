@@ -43,6 +43,7 @@ import {
   compressZstdFrame, createZstdFrameDecoder, decompressZstdFrame, decompressZstdPrefix, scanZstdFrames,
 } from './zstd.ts'
 import { ensureDurableDirectoryWin32, publishNewFileWin32 } from './win32.ts'
+import { publishNewFilePosix } from './posix.ts'
 import { verifyCurrentGenerationInWorker } from './migration-verifier.ts'
 import {
   JsonlGenerationSourceChangedError,
@@ -1132,18 +1133,19 @@ class JsonlSessionPersistence extends SessionPersistence {
     // Publish via link()+unlink(), NOT rename(): link fails with EEXIST if the
     // final path already exists, so two processes materializing the same id
     // concurrently cannot clobber each other. rename() would silently overwrite.
+    // A host that denies hard links (Android under SELinux) copies exclusively.
     let linked = false
     try {
-      await link(tmp, finalPath)
+      await publishNewFilePosix(tmp, finalPath, link)
       linked = true
     } finally {
       // Remove an unpublished temp on failure. After publication, defer cleanup
       // until the directory entry is durable so cleanup cannot reject a live log.
-      /* v8 ignore next -- link failure is the TOCTOU/IO race guarded above; not reachable in test */
+      /* v8 ignore next -- publication failure is the TOCTOU/IO race guarded above; not reachable in test */
       if (!linked) await rm(tmp, { force: true })
     }
-    // link() succeeded — the log is published. fsync the directory so the new
-    // entry survives a power loss: the new link is not crash-durable until the
+    // Publication succeeded — the log is published. fsync the directory so the new
+    // entry survives a power loss: the new entry is not crash-durable until the
     // parent directory's metadata is synced.
     await this.syncDirPosix(dir)
     // Best-effort temp cleanup: the log is already published and durable, so a

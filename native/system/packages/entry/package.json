@@ -38,6 +38,7 @@
     "access": "public"
   },
   "optionalDependencies": {
+    "@deepseek-ai/node-addon-system-android-arm64": "workspace:*",
     "@deepseek-ai/node-addon-system-darwin-arm64": "workspace:*",
     "@deepseek-ai/node-addon-system-darwin-x64": "workspace:*",
     "@deepseek-ai/node-addon-system-linux-arm64": "workspace:*",

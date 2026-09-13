@@ -29,12 +29,19 @@ peerDependencyRules:
 # pnpm 10+ blocks any dependency shipping an install/build script until it is
 # explicitly reviewed here (strictDepBuilds defaults to true: an unlisted script
 # is a hard install error). Every such package MUST be listed; we deny by
-# default and only allow scripts we need. esbuild (native binary) and lefthook
-# (git hooks) genuinely need theirs.
+# default and only allow scripts we need. esbuild (native binary) genuinely
+# needs its.
 allowBuilds:
   esbuild: true
-  lefthook: true
+  # lefthook publishes no android-arm64 binary, so its postinstall cannot run
+  # on Termux/Android; git hooks are not needed to build.
+  lefthook: false
   # Cross-platform boundary for the persistent PTY backend, including ConPTY on Windows.
+  # Termux/Android: node-pty ships no android-arm64 prebuild, so its node-gyp
+  # build runs. Node reports OS=android, which makes gyp require the
+  # android_ndk_path variable; any existing directory satisfies it, since the
+  # only use is an include path for cpufeatures. Install with
+  # GYP_DEFINES="android_ndk_path=$PREFIX" so the build succeeds.
   node-pty: true
   # Pulled in by @earendil-works/pi-ai (optional LLM API backend). pnpm lists
   # them only because they ship lifecycle scripts, but those are no-ops we don't
