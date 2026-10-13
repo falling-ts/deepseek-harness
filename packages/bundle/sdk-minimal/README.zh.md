@@ -1,5 +1,5 @@
 ---
-description: "供需要不含共享 base bundle 的极简跨平台 coding agent（编程智能体）的用户使用的独立单工具 SDK profile。"
+description: "独立 SDK profile，提供持久 shell 和 Session 工作目录工具，用于不含共享 base bundle 的极简跨平台 coding agent（编程智能体）。"
 kind: "package-bundle"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-当 SDK 客户端需要小型、显式的 coding agent 运行时时，请使用 `dsh --profile sdk-minimal`。该 profile 只公布按平台选择的持久 shell，把会话持久化为未压缩 JSONL，并从 SDK 初始化请求选择模型。它提供完整 Cordis 配置树，并刻意排除 `dsh-base`、Web、settings、托管凭据、遥测、压缩（compaction）、文件系统工具、workspace 指令、skill（技能）、jobs 与 subagent。其 danger-full-access 策略允许 shell 修改进程可访问的任何路径，因此只能配合隔离 workspace 使用。
+当 SDK 客户端需要小型、显式的 coding agent 运行时时，请使用 `dsh --profile sdk-minimal`。该 profile 默认公布按平台选择的持久 shell 和 `working_directory`，把会话持久化为未压缩 JSONL，并从 SDK 初始化请求选择模型。它提供完整 Cordis 配置树，并排除 `dsh-base`、Web、settings、托管凭据、遥测、压缩（compaction）、文件系统工具、workspace 指令、skill（技能）、jobs 与 subagent。其 danger-full-access 策略允许 shell 修改进程可访问的任何路径，因此只能配合隔离 workspace 使用。
 
 ## 目录
 
@@ -38,6 +38,8 @@ dsh --profile sdk-minimal
 
 该 profile 只挂载一套持久 shell：Linux 和 macOS 使用 Bash，Windows 使用 PowerShell。两套配置都使用 300 秒超时与一个 agent 自有终端；另一平台的配置项保持禁用。
 
+与其他随附 profile 一样，它统一挂载 [MCP 资源](../../mcp/mcp-resources/README.zh.md)一次。只需配置 [MCP 客户端条目](../../mcp/mcp-client/README.zh.md)即可添加服务器。其他提供方挂载的客户端也属于已配置状态。调用方作用域中未配置服务器时，MCP 不贡献提示词文本或工具，默认仍为 shell 与 `working_directory` 两个工具。
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -46,7 +48,7 @@ dsh --profile sdk-minimal
 <details>
 <summary>实现细节——点击展开</summary>
 
-该 bundle 的单个 insert 就是完整应用配置树：SDK stdio 启动与 JSON-RPC 服务、一个由环境配置的 DeepSeek 适配器、显式 agent 核心、本地子进程执行、按平台选择的持久 shell PTY，以及位于 `$DSH_HOME/sessions` 的未压缩 JSONL 持久化。它不继承其他 bundle，因此每个额外配置项都是显式 profile 变更。
+该 bundle 的单个 insert 就是完整应用配置树：SDK stdio 启动与 JSON-RPC 服务、一个由环境配置的 DeepSeek 适配器、显式 agent 核心、按配置启用的 MCP 资源工具、本地文件系统与子进程服务、Session 工作目录状态及其工具、按平台选择的持久 shell PTY，以及位于 `$DSH_HOME/sessions` 的未压缩 JSONL 持久化。它不继承其他 bundle，因此每个额外配置项都是显式 profile 变更。
 
 ### 源码地图
 
@@ -54,7 +56,6 @@ dsh --profile sdk-minimal
 |---|---|
 | [`cordis.patch.yml`](cordis.patch.yml) | 完整独立 profile 配置树及其环境默认值 |
 | [`src/index.ts`](src/index.ts) | Bundle 包入口 |
-| — | 不发布运行时不变式伴生项；本包只是静态 patch 列表载体，插入的各行分别拥有自己的运行时关系和不变式伴生项。 |
 | [`tests/sdk-minimal.spec.ts`](tests/sdk-minimal.spec.ts) | 精确组合、profile 名称与平台选择检查 |
 
 </details>
@@ -77,11 +78,11 @@ dsh --profile sdk-minimal
 
 #### 模型看到的内容
 
-系统提示词取 `DSH_SYSTEM_PROMPT`，未设置时使用 `You are a helpful software engineer assistant.`。对外公布的唯一工具是 Linux/macOS 上 agent 所有的持久 `bash` 或 Windows 上的 `pwsh`；运行时上下文、文件系统工具、workspace 指令、skill、jobs 控制、压缩与 Harness 身份均不存在。
+系统提示词取 `DSH_SYSTEM_PROMPT`，未设置时使用 `You are a helpful software engineer assistant.`。未配置 MCP 服务器时，对外公布的工具为 `working_directory`，以及 Linux/macOS 上 agent 所有的持久 `bash` 或 Windows 上的 `pwsh`。必需的用户上下文提供当前目录。可选运行时上下文、文件系统工具、workspace 指令、skill、jobs 控制、压缩与 Harness 身份均不存在。
 
 #### Token 影响
 
-一个稳定 persona 加一个工具 schema。工具结果与普通对话历史随会话增长。
+默认是一个稳定 persona、两个工具 schema，以及初始目录与后续变更的用户上下文。已配置 MCP 服务器会添加自己的工具、共享资源工具及可用的服务器指令。工具结果与普通对话历史随会话增长。
 
 #### KV Cache 影响
 

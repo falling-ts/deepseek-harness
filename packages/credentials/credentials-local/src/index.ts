@@ -511,9 +511,6 @@ function sameJsonValue(left: unknown, right: unknown): boolean {
 
 /** File-backed credentials provider (`$DSH_HOME/.credentials.yaml`). */
 export class LocalCredentialProvider extends CredentialProvider {
-  /* jscpd:ignore-start -- deliberate config-surface and lifecycle symmetry with
-     settings-file (prefer symmetry for parallel values); extracting the shared
-     shape would couple the two providers' teardown semantics across packages. */
   static Config: z<Config> = z.object({
     path: z.string(),
     dshHome: z.string(),
@@ -545,7 +542,6 @@ export class LocalCredentialProvider extends CredentialProvider {
   private isClosed(): boolean {
     return this.closed
   }
-  /* jscpd:ignore-end */
 
   constructor(ctx: Context, public config: Config) {
     super(ctx)
@@ -579,9 +575,6 @@ export class LocalCredentialProvider extends CredentialProvider {
     }
     await this.loadInitial()
     if (!this.spec.watch) return
-    /* jscpd:ignore-start -- same watcher discipline as settings-file by design:
-       the serialized-refresh and quiesce-on-dispose shape is the reviewed
-       lifecycle contract, not accidental repetition. */
     const watcher = chokidarWatch(await canonicalizeWatchPath(this.spec.filename), {
       ignoreInitial: true,
       awaitWriteFinish: {
@@ -600,18 +593,28 @@ export class LocalCredentialProvider extends CredentialProvider {
       if (this.closed) return
       this.queueRefresh()
     })
-    watcher.on('error', (error) => {
+    const reportWatcherError = (error: unknown): void => {
+      // A watcher error after disposal is not actionable: the watched home is
+      // going away with this provider, and logging it would be noise.
+      if (this.closed) return
       this.ctx.logger.warn('credentials-local: watcher error on %s', this.spec.filename)
       this.ctx.logger.warn(error)
-    })
+    }
+    watcher.on('error', reportWatcherError)
     yield async () => {
       // Quiesce: stop accepting events, close the watcher, then wait out any
       // queued or in-flight operation so nothing publishes after disposal.
       this.closed = true
-      await watcher.close()
+      // `close()` drops every listener but leaves a scheduled write-settle
+      // poll; its straggler stats the document this teardown is deleting,
+      // which Windows reports as EPERM, and an 'error' emission with no
+      // listener is rethrown as an uncaught exception. Re-attach across the
+      // close so that straggler stays inside this provider.
+      const closing = watcher.close()
+      watcher.on('error', reportWatcherError)
+      await closing
       await this.operations
     }
-    /* jscpd:ignore-end */
   }
 
   override resolve(ref: CredentialRef): Promise<ResolvedCredential | undefined> {
@@ -725,11 +728,6 @@ export class LocalCredentialProvider extends CredentialProvider {
     })
   }
 
-  /* jscpd:ignore-start -- the operation-chain and reload lifecycle is the same
-     reviewed contract as settings-file, deliberately mirrored (prefer symmetry
-     for parallel values); the two providers own different documents and
-     failure policies, so extracting a shared helper would couple their teardown
-     semantics across packages for a handful of lines. */
   /** Queue one exclusive document operation behind every earlier one. */
   private enqueue<T>(operation: () => Promise<T>): Promise<T> {
     const task = this.operations.then(operation)
@@ -737,17 +735,10 @@ export class LocalCredentialProvider extends CredentialProvider {
     return task
   }
 
-  /** Queue a reload; only an invariant violation escaping the fan-out can reject it. */
+  /** Queue a reload; `refresh()` contains its own failures, so the queued task never rejects. */
   private queueRefresh(): void {
-    void this.enqueue(() => this.refresh()).catch((error: unknown) => {
-      // Only an invariant violation escaping the update fan-out can reject a
-      // refresh; keep the operation queue alive and surface it as an error so
-      // one poisoned commit cannot silently end hot reloading forever.
-      this.ctx.logger.error('credentials-local: reload commit failed at %s', this.spec.filename)
-      this.ctx.logger.error(error)
-    })
+    void this.enqueue(() => this.refresh())
   }
-  /* jscpd:ignore-end */
 
   /** Queue one line edit; entry checks reject early, the queue re-judges them at run time. */
   private async write(ref: CredentialRef, value: string | undefined): Promise<void> {
@@ -780,7 +771,7 @@ export class LocalCredentialProvider extends CredentialProvider {
         if (value === undefined) this.values.delete(ref)
         else this.values.set(ref, value)
         // After the commit: a broken observer must never make the durable
-        // write look failed (an INVARIANT failure still rethrows).
+        // write look failed.
         this.notifyUpdated(ref)
       }, { waitMs: DOCUMENT_LOCK_WAIT_MS })
     })
@@ -855,22 +846,17 @@ export class LocalCredentialProvider extends CredentialProvider {
     }, { waitMs: DOCUMENT_LOCK_WAIT_MS })
   }
 
-  /* jscpd:ignore-start -- same deliberate mirror of settings-file's reload and
-     reconcile policy: warn-and-keep on a reload, throw on a write, invariant
-     failures propagate. */
   /**
    * Re-read the document after a watcher event. Unchanged content (including
    * this provider's own writes) is a no-op; an unreadable document keeps the
    * last good snapshot and warns — a live hot-reload must never take the
-   * process down. An invariant violation escaping the fan-out is not a reload
-   * failure and propagates to the queue's error surface.
+   * process down.
    */
   private async refresh(): Promise<void> {
     if (this.closed) return
     try {
       await this.reconcileFromDisk()
     } catch (error) {
-      if ((error as { code?: unknown } | null)?.code === 'INVARIANT') throw error
       this.ctx.logger.warn('credentials-local: reload failed at %s; keeping the last good document', this.spec.filename)
       this.ctx.logger.warn(error)
     }
@@ -906,7 +892,6 @@ export class LocalCredentialProvider extends CredentialProvider {
     for (const ref of changedRefs) this.notifyUpdated(ref)
     for (const key of changedRecords) this.notifyRecordUpdated(key)
   }
-  /* jscpd:ignore-end */
 
   /** Entries whose stored value changed; the parser has already proven every key addressable. */
   private changedRefs(prev: Map<string, string>, next: Map<string, string>): CredentialRef[] {

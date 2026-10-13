@@ -64,7 +64,8 @@ export function sidebarDrawerWidth(viewport: number): number {
  * @param rightbar - requested right panel width in px (0 = no track).
  * @param collapsedRail - track a closed sidebar reserves: the icon rail on a
  *   wide frame, zero where the closed sidebar floats instead (AppFrame passes 0
- *   on a narrow frame, so the conversation keeps the whole width).
+ *   on a narrow frame, so the conversation keeps the whole width) or hides it
+ *   entirely (macOS desktop).
  * @returns actual widths after shrinking or removing the right track; only
  *   without that track may the center fall below its minimum, down to zero.
  */

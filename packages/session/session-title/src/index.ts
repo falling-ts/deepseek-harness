@@ -21,7 +21,7 @@ import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-agent'
 export type {
   SessionTitleEventData,
-  SessionTitleModelProvenance,
+  SessionTitleModelIdentity,
   SessionTitleSnapshot,
   SessionTitleSource,
   SessionTitleUserMessage,
@@ -30,7 +30,7 @@ export type {
 import { fallbackSessionTitle, normalizeSessionTitle } from './normalize.ts'
 import type {
   SessionTitleEventData,
-  SessionTitleModelProvenance,
+  SessionTitleModelIdentity,
   SessionTitleSnapshot,
   SessionTitleSource,
   SessionTitleUserMessage,
@@ -98,7 +98,13 @@ export interface SessionTitleProviderRequest {
   /** All eligible human messages through this generation revision. */
   readonly messages: readonly SessionTitleUserMessage[]
   /** Exact current logged main-request route, when one has been recorded. */
-  readonly route?: SessionTitleModelProvenance
+  readonly route?: SessionTitleModelIdentity
+  /**
+   * Latest accepted title captured at invocation, including an accepted
+   * fallback whose event may follow the last eligible message. Absent before
+   * any title is accepted. The provider decides whether and how to use it.
+   */
+  readonly currentTitle?: SessionTitleSnapshot
   /** Cancellation for supersession, disposal, timeout composition, or the explicit caller. */
   readonly signal: AbortSignal
 }
@@ -110,7 +116,7 @@ export interface SessionTitleProviderResult {
   /** Exact seqs from `request.messages` used by this result. */
   readonly messageSeqs: readonly SessionSeq[]
   /** Auxiliary LLM route, when generation used a model. */
-  readonly model?: SessionTitleModelProvenance
+  readonly model?: SessionTitleModelIdentity
 }
 
 /** One optional asynchronous title implementation registered with the service. */
@@ -121,7 +127,7 @@ export interface SessionTitleProvider {
   readonly automatic: SessionTitleAutomaticMode
   /**
    * Produce one title revision.
-   * @param request - message snapshot, current route, session, and cancellation.
+   * @param request - message snapshot, current title, current route, session, and cancellation.
    * @returns proposed title plus exact input seqs and the optional provider/model route used to generate it.
    */
   generate(request: SessionTitleProviderRequest): Promise<SessionTitleProviderResult>
@@ -464,13 +470,14 @@ export class SessionTitleService extends Service {
 
   /**
    * Register the sole optional title provider. Disposal aborts its pending and
-   * active work before another provider may register.
+   * active work; a replacement may register once disposal has started, and the
+   * closing provider's late results never commit.
    * @param provider - provider identity, cadence, and generation function.
    * @returns exact Cordis effect disposer, which settles after active calls quiesce.
    */
   register(provider: SessionTitleProvider): () => Promise<void> {
     this.validateProvider(provider)
-    if (this.registration !== undefined) {
+    if (this.registration !== undefined && !this.registration.closing) {
       throw new Error(`session-title provider "${this.registration.provider.id}" is already registered`)
     }
     const registration: ProviderRegistration = {
@@ -545,7 +552,6 @@ export class SessionTitleService extends Service {
     const boundary = this.ctx.sessionProjections.stateOf(session, 'turnBoundary')?.lastStepBoundary
     const route = session.requestHeader()?.config
     if (boundary?.kind !== 'start'
-      || boundary.seq <= pending.throughSeq
       || route?.provider !== options.provider
       || route.model !== options.model) return
     this.startPending(session, state, pending, { provider: options.provider, model: options.model })
@@ -556,7 +562,7 @@ export class SessionTitleService extends Service {
     session: Session,
     state: SessionTitleWorkState,
     pending: PendingAutomaticWork,
-    route: SessionTitleModelProvenance,
+    route: SessionTitleModelIdentity,
   ): void {
     delete state.pending
     this.defer(async () => {
@@ -578,7 +584,7 @@ export class SessionTitleService extends Service {
   private startProvider(
     session: Session,
     work: ActiveProviderWork,
-    route?: SessionTitleModelProvenance,
+    route?: SessionTitleModelIdentity,
   ): Promise<SessionTitleSnapshot | undefined> {
     const run = Promise.resolve().then(() => this.runProvider(session, work, route))
     return this.track(run, work.registration)
@@ -588,18 +594,23 @@ export class SessionTitleService extends Service {
   private async runProvider(
     session: Session,
     work: ActiveProviderWork,
-    route?: SessionTitleModelProvenance,
+    route?: SessionTitleModelIdentity,
   ): Promise<SessionTitleSnapshot | undefined> {
     try {
       this.assertCurrent(session, work)
       await this.ensureFallback(session)
       this.assertCurrent(session, work)
+      // One snapshot supplies both inputs: messages stop at the scheduled
+      // watermark, while the current title is not bounded by that watermark.
       // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
-      const messages = collectSessionTitleMessages(session.snapshotEvents(), work.throughSeq)
+      const events = session.snapshotEvents()
+      const messages = collectSessionTitleMessages(events, work.throughSeq)
+      const currentTitle = foldSessionTitle(events)
       const result = await work.registration.provider.generate({
         session,
         messages,
         ...route === undefined ? {} : { route },
+        ...currentTitle === undefined ? {} : { currentTitle },
         signal: work.signal,
       })
       this.assertCurrent(session, work)
@@ -651,7 +662,7 @@ export class SessionTitleService extends Service {
       previous = index
     }
     const modelCandidate = candidate.model
-    let model: SessionTitleModelProvenance | undefined
+    let model: SessionTitleModelIdentity | undefined
     if (modelCandidate !== undefined) {
       if (modelCandidate === null || typeof modelCandidate !== 'object') {
         throw new Error('session-title provider result model must contain non-empty provider and model strings')
