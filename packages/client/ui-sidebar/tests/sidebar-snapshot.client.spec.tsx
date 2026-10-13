@@ -103,9 +103,9 @@ describe('sidebar shell snapshots', () => {
     document.documentElement.setAttribute('data-windows-titlebar', '')
     const { runtime } = await bench({ locale: 'en' })
     try {
-      const slot = runtime.renderSlot('sidebar', { collapsed: false, width: 300 })
+      const slot = runtime.renderSlot('sidebar', { collapsed: false, width: 300, narrow: false })
       expect(slot.container).toMatchSnapshot('windows expanded')
-      slot.update({ collapsed: true, width: 0 })
+      slot.update({ collapsed: true, width: 0, narrow: false })
       expect(slot.view.getAllByRole('button', { name: 'New session' })).toHaveLength(1)
       expect(slot.container).toMatchSnapshot('windows collapsed')
     } finally {
