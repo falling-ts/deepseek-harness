@@ -175,7 +175,7 @@ export class LocalTerminalHandle implements SubprocessTerminalHandle {
         const root = observed.tree(this.pid).find(member => member.pid === this.pid)
         if (this.exited && this.managedRangeEmpty) state = 'idle'
         else if (descendants.length > 0) state = 'busy'
-        else if (this.exited && this.managedOwner === undefined && this.platform === 'linux' && observed.complete === true && root === undefined) {
+        else if (this.exited && this.managedOwner === undefined && (this.platform === 'linux' || this.platform === 'android') && observed.complete === true && root === undefined) {
           state = observed.session(this.pid).some(member => observed.alive(member)) ? 'busy' : 'idle'
         }
         else if (observed.complete === true && root?.started === this.rootIdentity?.started && root !== undefined) {

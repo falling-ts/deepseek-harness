@@ -220,7 +220,7 @@ function fallbackOwner(
     if (platform === 'win32') return child.exitCode === null && child.signalCode === null
     try {
       process.kill(-pid, 0)
-      if (directSettled && platform === 'linux' && linuxGroupHasLiveMembers(pid) === false) return false
+      if (directSettled && (platform === 'linux' || platform === 'android') && linuxGroupHasLiveMembers(pid) === false) return false
       return true
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code

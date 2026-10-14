@@ -355,6 +355,9 @@ describe('macOS process inspector', () => {
     fake.internals.exec = () => { throw new Error('gone') }
     expect(createProcessInspector('darwin', 'arm64', fake.internals).foregroundPgid(1)).toBeUndefined()
     expect(createProcessInspector('win32', 'x64', fake.internals)).toBeInstanceOf(WindowsProcessInspector)
+    // Android exposes the same `/proc` surface as Linux and must reuse the Linux inspector.
+    expect(() => createProcessInspector('android', 'arm64', fake.internals)).not.toThrow()
+    expect(createProcessInspector('android', 'arm64', fake.internals).foregroundPgid(1)).toBeUndefined()
     expect(() => createProcessInspector('freebsd', 'x64', fake.internals)).toThrow('unsupported on platform freebsd')
   })
 })

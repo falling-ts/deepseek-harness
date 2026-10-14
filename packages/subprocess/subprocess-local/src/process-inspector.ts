@@ -534,7 +534,9 @@ class MacProcessInspector extends PosixProcessInspector {
 
 /**
  * Create the supported platform inspector or fail at plugin load.
- * @param platform - target Node platform.
+ * @param platform - target Node platform. Android exposes the same `/proc`
+ *   layout as Linux and is treated as a Linux platform here; a missing arch
+ *   syscall table would still degrade gracefully rather than throw.
  * @param arch - target CPU architecture for Linux syscall numbers.
  * @param internals - filesystem/process boundary, injectable for deterministic tests.
  * @returns Platform process inspector.
@@ -544,7 +546,9 @@ export function createProcessInspector(
   arch: NodeJS.Architecture = process.arch,
   internals: ProcessInspectorInternals = DEFAULT_INTERNALS,
 ): ProcessInspector {
-  if (platform === 'linux') return new LinuxProcessInspector(arch, internals)
+  // Android runs a Linux kernel with the same `/proc` inspection surface, so it
+  // reuses the Linux inspector (the arm64 syscall table is already known).
+  if (platform === 'linux' || platform === 'android') return new LinuxProcessInspector(arch, internals)
   if (platform === 'darwin') return new MacProcessInspector(internals)
   if (platform === 'win32') return createWindowsProcessInspector()
   throw new Error(`subprocess-local: terminal inspection is unsupported on platform ${platform}`)
